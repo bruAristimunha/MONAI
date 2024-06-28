@@ -1456,16 +1456,16 @@ class MNEBiosignalReader(ImageReader):
                 https://numpy.org/doc/stable/reference/generated/numpy.load.html
 
         """
-        img_: list[mne.io.BaseRaw] = []
+        signal_: list[mne.io.BaseRaw] = []
 
         filenames: Sequence[PathLike] = ensure_tuple(data)
         kwargs_ = self.kwargs.copy()
         kwargs_.update(kwargs)
         for name in filenames:
-            img = mne.io.read_raw(name, preload=True, verbose=False, **kwargs_)
-            img_.append(img)
+            signal = mne.io.read_raw(name, preload=True, verbose=False, **kwargs_)
+            signal_.append(signal)
 
-        return img_ if len(img_) > 1 else img_[0]
+        return signal_ if len(signal_) > 1 else signal_[0]
 
     def get_data(self, img) -> tuple[np.ndarray, dict]:
         """
