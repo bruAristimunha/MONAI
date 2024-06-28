@@ -1409,29 +1409,29 @@ class MNEBiosignalReader(ImageReader):
     Args:
         npz_keys: if loading npz file, only load the specified keys, if None, load all the items.
             stack the loaded items together to construct a new first dimension.
-        channel_dim: if not None, explicitly specify the channel dim, otherwise, treat the array as no channel.
         kwargs: additional args for `numpy.load` API except `allow_pickle`. more details about available args:
             https://numpy.org/doc/stable/reference/generated/numpy.load.html
 
     """
 
-    def __init__(self, mne_keys: KeysCollection | None = None, channel_dim: str | int | None = None, **kwargs):
+    def __init__(self, mne_keys: KeysCollection | None = None, **kwargs):
         super().__init__()
         if mne_keys is not None:
             mne_keys = ensure_tuple(mne_keys)
         self.mne_keys = mne_keys
-        self.channel_dim = float("nan") if channel_dim == "no_channel" else channel_dim
         self.kwargs = kwargs
 
     def verify_suffix(self, filename: Sequence[PathLike] | PathLike) -> bool:
         """
-        Verify whether the specified file or files format is supported by Numpy reader.
+        Verify whether the specified file or files format is supported by MNEBiosignal reader.
 
         Args:
             filename: file name or a list of file names to read.
                 if a list of files, verify all the suffixes.
         """
-        suffixes: Sequence[str] = ["npz", "npy"]
+        from mne.io._read_raw import _get_supported as suppport_formats
+        suffixes_with_dots = list(suppport_formats().keys())
+        suffixes: Sequence[str] = [s.lstrip('.') for s in suffixes_with_dots]
         return is_supported_format(filename, suffixes)
 
     def read(self, data: Sequence[PathLike] | PathLike, **kwargs):
@@ -1453,14 +1453,8 @@ class MNEBiosignalReader(ImageReader):
         kwargs_ = self.kwargs.copy()
         kwargs_.update(kwargs)
         for name in filenames:
-            img = np.load(name, allow_pickle=True, **kwargs_)
-            if Path(name).name.endswith(".npz"):
-                # load expected items from NPZ file
-                npz_keys = list(img.keys()) if self.npz_keys is None else self.npz_keys
-                for k in npz_keys:
-                    img_.append(img[k])
-            else:
-                img_.append(img)
+            img = mne.io.read_raw(name, preload=False, **kwargs_)
+            img_.append(img)
 
         return img_ if len(img_) > 1 else img_[0]
 
@@ -1476,24 +1470,18 @@ class MNEBiosignalReader(ImageReader):
             img: a Numpy array loaded from a file or a list of Numpy arrays.
 
         """
-        img_array: list[np.ndarray] = []
+        img_array: list[mne.io.BaseRaw] = []
         compatible_meta: dict = {}
-        if isinstance(img, np.ndarray):
+        if isinstance(img, mne.io.BaseRaw):
             img = (img,)
-
         for i in ensure_tuple(img):
             header: dict[MetaKeys, Any] = {}
-            if isinstance(i, np.ndarray):
-                # if `channel_dim` is None, can not detect the channel dim, use all the dims as spatial_shape
-                spatial_shape = np.asarray(i.shape)
-                if isinstance(self.channel_dim, int):
-                    spatial_shape = np.delete(spatial_shape, self.channel_dim)
-                header[MetaKeys.SPATIAL_SHAPE] = spatial_shape
-                header[MetaKeys.SPACE] = SpaceKeys.RAS
-            img_array.append(i)
-            header[MetaKeys.ORIGINAL_CHANNEL_DIM] = (
-                self.channel_dim if isinstance(self.channel_dim, int) else float("nan")
-            )
+            if isinstance(i, mne.io.BaseRaw):
+                n_times = i.n_times
+                ch_names = i.ch_names
+                header[MetaKeys.SPATIAL_SHAPE] = np.asarray((n_times, len(ch_names)))
+                header["mne_info"] = i.info
+            img_array.append(i.get_data())
             _copy_compatible_dict(header, compatible_meta)
 
         return _stack_images(img_array, compatible_meta), compatible_meta
