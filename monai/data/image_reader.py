@@ -1485,4 +1485,3 @@ class MNEBiosignalReader(ImageReader):
             _copy_compatible_dict(header, compatible_meta)
 
         return _stack_images(img_array, compatible_meta), compatible_meta
-
