@@ -19,8 +19,8 @@ import logging
 import sys
 import traceback
 import warnings
-from datetime import datetime
 from collections.abc import Sequence
+from datetime import datetime
 from pathlib import Path
 from pydoc import locate
 from typing import Callable
@@ -34,12 +34,12 @@ from monai.data.folder_layout import FolderLayout, FolderLayoutBase, default_nam
 from monai.data.image_reader import (
     ImageReader,
     ITKReader,
+    MNEBiosignalReader,
     NibabelReader,
     NrrdReader,
     NumpyReader,
     PILReader,
     PydicomReader,
-    MNEBiosignalReader,
 )
 from monai.data.meta_tensor import MetaTensor
 from monai.data.utils import is_no_channel

@@ -36,10 +36,10 @@ from monai.utils import MetaKeys, SpaceKeys, TraceKeys, ensure_tuple, optional_i
 
 if TYPE_CHECKING:
     import itk
+    import mne
     import nibabel as nib
     import nrrd
     import pydicom
-    import mne
     from nibabel.nifti1 import Nifti1Image
     from PIL import Image as PILImage
 
@@ -53,7 +53,16 @@ else:
     nrrd, has_nrrd = optional_import("nrrd", allow_namespace_pkg=True)
     mne, has_mne = optional_import("mne")
 
-__all__ = ["ImageReader", "ITKReader", "NibabelReader", "NumpyReader", "PILReader", "PydicomReader", "NrrdReader", "MNEBiosignalReader"]
+__all__ = [
+    "ImageReader",
+    "ITKReader",
+    "NibabelReader",
+    "NumpyReader",
+    "PILReader",
+    "PydicomReader",
+    "NrrdReader",
+    "MNEBiosignalReader",
+]
 
 
 class ImageReader(ABC):
@@ -1414,7 +1423,7 @@ class MNEBiosignalReader(ImageReader):
 
     """
 
-    def __init__(self, preprocess_steps = None, **kwargs):
+    def __init__(self, preprocess_steps=None, **kwargs):
         super().__init__()
 
         self.kwargs = kwargs
@@ -1429,8 +1438,9 @@ class MNEBiosignalReader(ImageReader):
                 if a list of files, verify all the suffixes.
         """
         from mne.io._read_raw import _get_supported as suppport_formats
+
         suffixes_with_dots = list(suppport_formats().keys())
-        suffixes: Sequence[str] = [s.lstrip('.') for s in suffixes_with_dots]
+        suffixes: Sequence[str] = [s.lstrip(".") for s in suffixes_with_dots]
         return is_supported_format(filename, suffixes)
 
     def read(self, data: Sequence[PathLike] | PathLike, **kwargs):
