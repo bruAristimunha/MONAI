@@ -1414,12 +1414,11 @@ class MNEBiosignalReader(ImageReader):
 
     """
 
-    def __init__(self, mne_keys: KeysCollection | None = None, **kwargs):
+    def __init__(self, preprocess_steps = None, **kwargs):
         super().__init__()
-        if mne_keys is not None:
-            mne_keys = ensure_tuple(mne_keys)
-        self.mne_keys = mne_keys
+
         self.kwargs = kwargs
+        self.preprocess_steps = preprocess_steps
 
     def verify_suffix(self, filename: Sequence[PathLike] | PathLike) -> bool:
         """
@@ -1453,7 +1452,7 @@ class MNEBiosignalReader(ImageReader):
         kwargs_ = self.kwargs.copy()
         kwargs_.update(kwargs)
         for name in filenames:
-            img = mne.io.read_raw(name, preload=False, verbose=False, **kwargs_)
+            img = mne.io.read_raw(name, preload=True, verbose=False, **kwargs_)
             img_.append(img)
 
         return img_ if len(img_) > 1 else img_[0]
@@ -1481,6 +1480,8 @@ class MNEBiosignalReader(ImageReader):
                 ch_names = i.ch_names
                 header[MetaKeys.SPATIAL_SHAPE] = np.asarray((n_times, len(ch_names)))
                 header["mne_info"] = i.info
+            if self.preprocess_steps is not None:
+                i = self.preprocess_steps(i)
             img_array.append(i.get_data())
             _copy_compatible_dict(header, compatible_meta)
 
