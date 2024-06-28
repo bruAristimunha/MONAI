@@ -19,6 +19,7 @@ import logging
 import sys
 import traceback
 import warnings
+from datetime import datetime
 from collections.abc import Sequence
 from pathlib import Path
 from pydoc import locate
@@ -38,6 +39,7 @@ from monai.data.image_reader import (
     NumpyReader,
     PILReader,
     PydicomReader,
+    MNEBiosignalReader,
 )
 from monai.data.meta_tensor import MetaTensor
 from monai.data.utils import is_no_channel
@@ -94,6 +96,8 @@ def switch_endianness(data, new="<"):
         data = [switch_endianness(x, new) for x in data]
     elif isinstance(data, dict):
         data = {k: switch_endianness(v, new) for k, v in data.items()}
+    elif isinstance(data, datetime):
+        data = switch_endianness(data.strftime("%m/%d/%Y, %H:%M:%S"), new)
     elif not isinstance(data, (bool, str, float, int, type(None))):
         raise RuntimeError(f"Unknown type: {type(data).__name__}")
     return data
