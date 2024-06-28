@@ -1447,13 +1447,13 @@ class MNEBiosignalReader(ImageReader):
                 https://numpy.org/doc/stable/reference/generated/numpy.load.html
 
         """
-        img_: list[Nifti1Image] = []
+        img_: list[mne.io.BaseRaw] = []
 
         filenames: Sequence[PathLike] = ensure_tuple(data)
         kwargs_ = self.kwargs.copy()
         kwargs_.update(kwargs)
         for name in filenames:
-            img = mne.io.read_raw(name, preload=False, **kwargs_)
+            img = mne.io.read_raw(name, preload=False, verbose=False, **kwargs_)
             img_.append(img)
 
         return img_ if len(img_) > 1 else img_[0]
