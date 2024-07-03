@@ -156,7 +156,7 @@ def _stack_images(image_list: list, meta_dict: dict):
         return np.concatenate(image_list, axis=channel_dim)
     # stack at a new first dim as the channel dim, if `'original_channel_dim'` is unspecified
     meta_dict[MetaKeys.ORIGINAL_CHANNEL_DIM] = 0
-    return np.concatenate(image_list, axis=0)
+    return np.stack(image_list, axis=0)
 
 
 @require_pkg(pkg_name="itk")
@@ -1125,12 +1125,12 @@ class NumpyReader(ImageReader):
                 spatial_shape = np.asarray(i.shape)
                 if isinstance(self.channel_dim, int):
                     spatial_shape = np.delete(spatial_shape, self.channel_dim)
-                #header[MetaKeys.SPATIAL_SHAPE] = spatial_shape
-                #header[MetaKeys.SPACE] = SpaceKeys.RAS
+                header[MetaKeys.SPATIAL_SHAPE] = spatial_shape
+                header[MetaKeys.SPACE] = SpaceKeys.RAS
             img_array.append(i)
-            # header[MetaKeys.ORIGINAL_CHANNEL_DIM] = (
-            #    self.channel_dim if isinstance(self.channel_dim, int) else float("nan")
-            #)
+            header[MetaKeys.ORIGINAL_CHANNEL_DIM] = (
+                self.channel_dim if isinstance(self.channel_dim, int) else float("nan")
+            )
             _copy_compatible_dict(header, compatible_meta)
 
         return _stack_images(img_array, compatible_meta), compatible_meta
