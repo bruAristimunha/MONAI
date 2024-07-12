@@ -36,13 +36,14 @@ from monai.utils import MetaKeys, SpaceKeys, TraceKeys, ensure_tuple, optional_i
 
 if TYPE_CHECKING:
     import itk
+    import mne
     import nibabel as nib
     import nrrd
     import pydicom
     from nibabel.nifti1 import Nifti1Image
     from PIL import Image as PILImage
 
-    has_nrrd = has_itk = has_nib = has_pil = has_pydicom = True
+    has_nrrd = has_itk = has_nib = has_pil = has_pydicom = has_mne = True
 else:
     itk, has_itk = optional_import("itk", allow_namespace_pkg=True)
     nib, has_nib = optional_import("nibabel")
@@ -50,8 +51,18 @@ else:
     PILImage, has_pil = optional_import("PIL.Image")
     pydicom, has_pydicom = optional_import("pydicom")
     nrrd, has_nrrd = optional_import("nrrd", allow_namespace_pkg=True)
+    mne, has_mne = optional_import("mne")
 
-__all__ = ["ImageReader", "ITKReader", "NibabelReader", "NumpyReader", "PILReader", "PydicomReader", "NrrdReader"]
+__all__ = [
+    "ImageReader",
+    "ITKReader",
+    "NibabelReader",
+    "NumpyReader",
+    "PILReader",
+    "PydicomReader",
+    "NrrdReader",
+    "MNEBiosignalReader",
+]
 
 
 class ImageReader(ABC):
@@ -1395,3 +1406,93 @@ class NrrdReader(ImageReader):
         header["space origin"] = header["space origin"][::-1]
         header["sizes"] = header["sizes"][::-1]
         return header
+
+
+@require_pkg(pkg_name="mne")
+class MNEBiosignalReader(ImageReader):
+    """
+    Load NPY or NPZ format data based on Numpy library, they can be arrays or pickled objects.
+    A typical usage is to load the `mask` data for classification task.
+    It can load part of the npz file with specified `npz_keys`.
+
+    Args:
+        npz_keys: if loading npz file, only load the specified keys, if None, load all the items.
+            stack the loaded items together to construct a new first dimension.
+        kwargs: additional args for `numpy.load` API except `allow_pickle`. more details about available args:
+            https://numpy.org/doc/stable/reference/generated/numpy.load.html
+
+    """
+
+    def __init__(self, preprocess_steps=None, **kwargs):
+        super().__init__()
+
+        self.kwargs = kwargs
+        self.preprocess_steps = preprocess_steps
+
+    def verify_suffix(self, filename: Sequence[PathLike] | PathLike) -> bool:
+        """
+        Verify whether the specified file or files format is supported by MNEBiosignal reader.
+
+        Args:
+            filename: file name or a list of file names to read.
+                if a list of files, verify all the suffixes.
+        """
+        from mne.io._read_raw import _get_supported as suppport_formats
+
+        suffixes_with_dots = list(suppport_formats().keys())
+        suffixes: Sequence[str] = [s.lstrip(".") for s in suffixes_with_dots]
+        return is_supported_format(filename, suffixes)
+
+    def read(self, data: Sequence[PathLike] | PathLike, **kwargs):
+        """
+        Read image data from specified file or files, it can read a list of data files
+        and stack them together as multi-channel data in `get_data()`.
+        Note that the returned object is Numpy array or list of Numpy arrays.
+
+        Args:
+            data: file name or a list of file names to read.
+            kwargs: additional args for `numpy.load` API except `allow_pickle`, will override `self.kwargs` for existing keys.
+                More details about available args:
+                https://numpy.org/doc/stable/reference/generated/numpy.load.html
+
+        """
+        signal_: list[mne.io.BaseRaw] = []
+
+        filenames: Sequence[PathLike] = ensure_tuple(data)
+        kwargs_ = self.kwargs.copy()
+        kwargs_.update(kwargs)
+        for name in filenames:
+            signal = mne.io.read_raw(name, preload=True, verbose=False, **kwargs_)
+            signal_.append(signal)
+
+        return signal_ if len(signal_) > 1 else signal_[0]
+
+    def get_data(self, img) -> tuple[np.ndarray, dict]:
+        """
+        Extract data array and metadata from loaded image and return them.
+        This function returns two objects, first is numpy array of image data, second is dict of metadata.
+        It constructs `affine`, `original_affine`, and `spatial_shape` and stores them in meta dict.
+        When loading a list of files, they are stacked together at a new dimension as the first dimension,
+        and the metadata of the first image is used to represent the output metadata.
+
+        Args:
+            img: a Numpy array loaded from a file or a list of Numpy arrays.
+
+        """
+        img_array: list[mne.io.BaseRaw] = []
+        compatible_meta: dict = {}
+        if isinstance(img, mne.io.BaseRaw):
+            img = (img,)
+        for i in ensure_tuple(img):
+            header: dict[MetaKeys, Any] = {}
+            if isinstance(i, mne.io.BaseRaw):
+                n_times = i.n_times
+                ch_names = i.ch_names
+                header[MetaKeys.SPATIAL_SHAPE] = np.asarray((n_times, len(ch_names)))
+                header["mne_info"] = i.info
+            if self.preprocess_steps is not None:
+                i = self.preprocess_steps(i)
+            img_array.append(i.get_data())
+            _copy_compatible_dict(header, compatible_meta)
+
+        return _stack_images(img_array, compatible_meta), compatible_meta

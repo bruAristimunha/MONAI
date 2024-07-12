@@ -20,6 +20,7 @@ import sys
 import traceback
 import warnings
 from collections.abc import Sequence
+from datetime import datetime
 from pathlib import Path
 from pydoc import locate
 from typing import Callable
@@ -33,6 +34,7 @@ from monai.data.folder_layout import FolderLayout, FolderLayoutBase, default_nam
 from monai.data.image_reader import (
     ImageReader,
     ITKReader,
+    MNEBiosignalReader,
     NibabelReader,
     NrrdReader,
     NumpyReader,
@@ -60,6 +62,7 @@ SUPPORTED_READERS = {
     "numpyreader": NumpyReader,
     "pilreader": PILReader,
     "nibabelreader": NibabelReader,
+    "biosignalreader": MNEBiosignalReader,
 }
 
 
@@ -93,6 +96,8 @@ def switch_endianness(data, new="<"):
         data = [switch_endianness(x, new) for x in data]
     elif isinstance(data, dict):
         data = {k: switch_endianness(v, new) for k, v in data.items()}
+    elif isinstance(data, datetime):
+        data = switch_endianness(data.strftime("%m/%d/%Y, %H:%M:%S"), new)
     elif not isinstance(data, (bool, str, float, int, type(None))):
         raise RuntimeError(f"Unknown type: {type(data).__name__}")
     return data
